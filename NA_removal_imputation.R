@@ -57,13 +57,13 @@ remove.impute.NA <- function(dataTrain,
   dataTest <- dataTest[, keep]
   if (method == "knn"){
     print("(2) Imputing remaining NAs...")
-    print("Method: KNN using ",k,"-nearest neighbor")
+    print(paste("Method: KNN using ",k,"-nearest neighbor"))
     # Impute the remaining NAs with the k-nearest neighbor
     print(paste("Number of NAs in the training set before imputation:", sum(is.na(dataTrain))))
     print(paste("Number of NAs in the testing set before imputation:", sum(is.na(dataTest))))
     preProcValues <- caret::preProcess(dataTrain, method = "knnImpute", k = k)
-    trainTransform <- predict(dataTrain, preProcValues)
-    testTransform <- predict(dataTest, preProcValues)
+    trainTransform <- caret::predict(dataTrain, preProcValues)
+    testTransform <- caret::predict(dataTest, preProcValues)
     print(paste("Number of NAs in the training set after imputation:", sum(is.na(trainTransform))))
     print(paste("Number of NAs in the testing set after imputation:", sum(is.na(testTransform))))
     return(my_list)
@@ -71,10 +71,14 @@ remove.impute.NA <- function(dataTrain,
   else if (method == "median") {
     print("(2) Imputing remaining NAs...")
     print("Method: Median")
-    # Impute the remaining NAs with the k-nearest neighbor 
+    # Impute the remaining NAs with the median 
+    print(paste("Number of NAs in the training set before imputation:", sum(is.na(dataTrain))))
+    print(paste("Number of NAs in the testing set before imputation:", sum(is.na(dataTest))))
     preProcValues <- caret::preProcess(dataTrain, method = "medianImpute")
-    trainTransform <- predict(dataTrain, preProcValues)
-    testTransform <- predict(dataTest, preProcValues)
+    trainTransform <- caret::predict(dataTrain, preProcValues)
+    testTransform <- caret::predict(dataTest, preProcValues)
+    print(paste("Number of NAs in the training set after imputation:", sum(is.na(trainTransform))))
+    print(paste("Number of NAs in the testing set after imputation:", sum(is.na(testTransform))))
     return(my_list)
   }
   else if (method == "mean") {
