@@ -12,9 +12,12 @@
 #' For "mean" method it is necessary to exclude this column from the computation.
 #' Therefore, it is necessary to specify the name column in @param class_label 
 #' @param dataTest a data frame with testing samples in rows and CpG in columns. 
-#' Non-numeric data will not be pre-processed and their values will be in the data 
-#' frame produced by the predict function. Therefore, it is possible to have 
-#' additional columns with labels for ML classification
+#' For "knn" and "median" methods, non-numeric data will not be pre-processed and 
+#' their values will be in the data frame produced by the predict function. 
+#' Therefore, it is possible to have additional columns with labels for ML 
+#' classification.
+#' For "mean" method it is necessary to exclude this column from the computation.
+#' Therefore, it is necessary to specify the name column in @param class_label 
 #' @param method a character value with imputation method
 #' Default: "knn"
 #' @param ProbeCutoff a numeric value of frecuency of missing values to filter out 
@@ -28,11 +31,12 @@
 #' @details Three imputation criteria can be used: "knn", median" and "mean".
 #' k-nearest neighbor imputation is carried out by finding the k closest samples 
 #' (Euclidian distance) in the training set. This method is simple, accurate and 
-#' accepts missing values. This method is simple, accurate and accepts missing 
-#' values, but it has much higher computational cost
+#' accepts missing values, but it has much higher computational cost
 #' Imputation via medians takes the median of each predictor in the training set, 
 #' and uses them to fill missing values. This method is simple, fast, and accepts 
 #' missing values, but treats each predictor independently, and may be inaccurate.
+#' Imputation via means takes the mean of each predictor in the training set, 
+#' and uses them to fill missing values. 
 #' @return A list with the same training and testing data frame but without probes 
 #' with too many NAs and missing value imputation
 
@@ -62,8 +66,8 @@ remove.impute.NA <- function(dataTrain,
     print(paste("Number of NAs in the training set before imputation:", sum(is.na(dataTrain))))
     print(paste("Number of NAs in the testing set before imputation:", sum(is.na(dataTest))))
     preProcValues <- caret::preProcess(dataTrain, method = "knnImpute", k = k)
-    trainTransform <- caret::predict(dataTrain, preProcValues)
-    testTransform <- caret::predict(dataTest, preProcValues)
+    trainTransform <- caret::predict(preProcValues, dataTrain)
+    testTransform <- caret::predict(preProcValues, dataTest)
     print(paste("Number of NAs in the training set after imputation:", sum(is.na(trainTransform))))
     print(paste("Number of NAs in the testing set after imputation:", sum(is.na(testTransform))))
     return(my_list)
@@ -75,8 +79,8 @@ remove.impute.NA <- function(dataTrain,
     print(paste("Number of NAs in the training set before imputation:", sum(is.na(dataTrain))))
     print(paste("Number of NAs in the testing set before imputation:", sum(is.na(dataTest))))
     preProcValues <- caret::preProcess(dataTrain, method = "medianImpute")
-    trainTransform <- caret::predict(dataTrain, preProcValues)
-    testTransform <- caret::predict(dataTest, preProcValues)
+    trainTransform <- caret::predict(preProcValues, dataTrain)
+    testTransform <- caret::predict(preProcValues, dataTest)
     print(paste("Number of NAs in the training set after imputation:", sum(is.na(trainTransform))))
     print(paste("Number of NAs in the testing set after imputation:", sum(is.na(testTransform))))
     return(my_list)
