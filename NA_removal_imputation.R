@@ -23,13 +23,15 @@
 #' @param ProbeCutoff a numeric value of frecuency of missing values to filter out 
 #' probes
 #' Default: 0.1
-#' @param k the number of nearest neighbors from the training set to use for 
+#' @param k the number of nearest neighbours from the training set to use for 
 #' imputation
 #' Default: 5
 #' @param class_label a character value corresponding to the column name that containing 
-#' the labels use to classify 
+#' the labels use to classify
+#' @param verbose logical value. Prints a log as the computations proceed
+#' Default: FALSE
 #' @details Three imputation criteria can be used: "knn", median" and "mean".
-#' k-nearest neighbor imputation is carried out by finding the k closest samples 
+#' k-nearest neighbour imputation is carried out by finding the k closest samples 
 #' (Euclidian distance) in the training set. This method is simple, accurate and 
 #' accepts missing values, but it has much higher computational cost
 #' Imputation via medians takes the median of each predictor in the training set, 
@@ -45,44 +47,61 @@ remove.impute.NA <- function(dataTrain,
                             method = "median",
                             ProbeCutoff = 0.1,
                             k = 5,
-                            class_label = "")
+                            class_label = "",
+                            verbose = FALSE)
 {
-  print("<<<STARTING REMOVAL AND IMPUTATION OF NA...>>>")
-  print(paste("Number of NAs in the training set before removal:", sum(is.na(dataTrain))))
-  print(paste("Number of NAs in the testing set before removal:", sum(is.na(dataTest))))
+  if (verbose == TRUE){
+    print("<<<STARTING REMOVAL AND IMPUTATION OF NA...>>>")
+    print(paste("Number of NAs in the training set before removal:", sum(is.na(dataTrain))))
+    print(paste("Number of NAs in the testing set before removal:", sum(is.na(dataTest))))
+  }
   # Remove probes with too many NA values (> 10% by default)
   print(paste("(1) Removing probes with more than ", ProbeCutoff*100, "% of NAs..."))
-  keep <- apply(dataTrain, 2, function(x) {
+  keep <- mclapply(dataTrain, function(x) {
     percentage_NA <-sum(is.na(x)) / dim(dataTrain)[1]
     return(ifelse(percentage_NA > ProbeCutoff, FALSE, TRUE))
   })
-  print(paste0("Number of probes to remove based on % of NAs: ", length(keep) - sum(keep)))
-  dataTrain <- dataTrain[, keep]
-  dataTest <- dataTest[, keep]
-  if (method == "knn"){
-    print("(2) Imputing remaining NAs...")
-    print(paste("Method: KNN using ",k,"-nearest neighbor"))
-    # Impute the remaining NAs with the k-nearest neighbor
-    print(paste("Number of NAs in the training set before imputation:", sum(is.na(dataTrain))))
-    print(paste("Number of NAs in the testing set before imputation:", sum(is.na(dataTest))))
-    preProcValues <- caret::preProcess(dataTrain, method = "knnImpute", k = k)
-    trainTransform <- caret::predict(preProcValues, dataTrain)
-    testTransform <- caret::predict(preProcValues, dataTest)
-    print(paste("Number of NAs in the training set after imputation:", sum(is.na(trainTransform))))
-    print(paste("Number of NAs in the testing set after imputation:", sum(is.na(testTransform))))
-    return(my_list)
+  if (verbose == TRUE){
+    print(paste0("Number of probes to remove based on % of NAs: ", length(unlist(keep)) - sum(unlist(keep))))
   }
-  else if (method == "median") {
+  dataTrain <- dataTrain[, unlist(keep)]
+  dataTest <- dataTest[, unlist(keep)]
+  if (method == "median") {
     print("(2) Imputing remaining NAs...")
     print("Method: Median")
-    # Impute the remaining NAs with the median 
-    print(paste("Number of NAs in the training set before imputation:", sum(is.na(dataTrain))))
-    print(paste("Number of NAs in the testing set before imputation:", sum(is.na(dataTest))))
-    preProcValues <- caret::preProcess(dataTrain, method = "medianImpute")
-    trainTransform <- caret::predict(preProcValues, dataTrain)
-    testTransform <- caret::predict(preProcValues, dataTest)
-    print(paste("Number of NAs in the training set after imputation:", sum(is.na(trainTransform))))
-    print(paste("Number of NAs in the testing set after imputation:", sum(is.na(testTransform))))
+    # Impute the remaining NAs with the mean 
+    # transform the data frame to a numerical matrix to speed up the imputation
+    class_label_train <- as.factor(dataTrain[, class_label])
+    class_label_test <- as.factor(dataTest[, class_label])
+    train_matrix <- dataTrain[, !names(dataTrain) %in% class_label]
+    test_matrix <- dataTest[, !names(dataTest) %in% class_label]
+    train_matrix <- t(train_matrix)
+    test_matrix <- t(test_matrix)
+    # extract the median value of each CpG to impute NA
+    median_NA <- matrixStats::rowMedians(train_matrix, na.rm = TRUE)
+    # create a logical matrix with NA information
+    logical_matrix_NA_train <- is.na(train_matrix)
+    logical_matrix_NA_test <- is.na(test_matrix)
+    if (verbose == TRUE){
+      print(paste("Number of NAs in the training set before imputation:", sum(is.na(train_matrix))))
+      print(paste("Number of NAs in the testing set before imputation:", sum(is.na(test_matrix))))
+    }
+    # impute NA with median values from the training data
+    train_matrix[logical_matrix_NA_train] <- median_NA[row(train_matrix)][logical_matrix_NA_train]
+    test_matrix[logical_matrix_NA_test] <- median_NA[row(test_matrix)][logical_matrix_NA_test]
+    if (verbose == TRUE){
+      print(paste("Number of NAs in the training set after imputation:", sum(is.na(train_matrix))))
+      print(paste("Number of NAs in the testing set after imputation:", sum(is.na(test_matrix))))
+    }
+    # transform the matrix to a transpose data frame with tumor tissue site information
+    # with samples in rows and CpG in columns
+    train_matrix_df <- as.data.frame(t(train_matrix))
+    test_matrix_df <- as.data.frame(t(test_matrix))
+    train_df_tumor <- cbind(train_matrix_df, as.factor(class_label_train))
+    test_df_tumor <- cbind(test_matrix_df, as.factor(class_label_test))
+    colnames(train_df_tumor)[dim(train_df_tumor)[2]] <- class_label
+    colnames(test_df_tumor)[dim(test_df_tumor)[2]] <- class_label
+    my_list <- list("dataTrain" = train_df_tumor, "dataTest" = test_df_tumor)
     return(my_list)
   }
   else if (method == "mean") {
@@ -101,13 +120,17 @@ remove.impute.NA <- function(dataTrain,
     # create a logical matrix with NA information
     logical_matrix_NA_train <- is.na(train_matrix)
     logical_matrix_NA_test <- is.na(test_matrix)
-    print(paste("Number of NAs in the training set before imputation:", sum(is.na(train_matrix))))
-    print(paste("Number of NAs in the testing set before imputation:", sum(is.na(test_matrix))))
+    if (verbose == TRUE){
+      print(paste("Number of NAs in the training set before imputation:", sum(is.na(train_matrix))))
+      print(paste("Number of NAs in the testing set before imputation:", sum(is.na(test_matrix))))
+    }
     # impute NA with median values from the training data
     train_matrix[logical_matrix_NA_train] <- mean_NA[row(train_matrix)][logical_matrix_NA_train] # very slow
     test_matrix[logical_matrix_NA_test] <- mean_NA[row(test_matrix)][logical_matrix_NA_test]
-    print(paste("Number of NAs in the training set after imputation:", sum(is.na(train_matrix))))
-    print(paste("Number of NAs in the testing set after imputation:", sum(is.na(test_matrix))))
+    if (verbose == TRUE){
+      print(paste("Number of NAs in the training set after imputation:", sum(is.na(train_matrix))))
+      print(paste("Number of NAs in the testing set after imputation:", sum(is.na(test_matrix))))
+    }
     # transform the matrix to a transpose data frame with tumor tissue site information
     # with samples in rows and CpG in columns
     train_matrix_df <- as.data.frame(t(train_matrix))
