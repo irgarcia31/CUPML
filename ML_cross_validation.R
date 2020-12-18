@@ -14,14 +14,16 @@ library(doParallel) # paralellize
 DATA_DIR <- "/mnt/ElRaid/irodriguez/Nextcloud/share/20201129_IRodriguez_ML_TCGA/data/tb_values/"
 # Path where the results of the project are stored
 RESULTS_DIR <- "/mnt/ElRaid/irodriguez/Nextcloud/share/20201129_IRodriguez_ML_TCGA/results/"
+# Path where the code of the project are stored
+CODE_DIR <- "/mnt/ElRaid/irodriguez/Nextcloud/share/20201129_IRodriguez_ML_TCGA/code/"
 # Sample sheet column name use to classify.
-class_label <- "tumor_tissue_site"
+class_label <- "Species"
 seed <- 1234
 # If FALSE, no log will be printed
 verbose <- FALSE
 # Pearson's correlation threshold above which probes are considered to be higly 
 # correlated
-cutoff_correlated <- 0.9
+cutoff_correlated <- 0.3
 # ML model evaluation metrics
 metric <- "Accuracy"
 # accuracy and kappa: default metrics on binary and multi-class datasets (kappa 
@@ -31,9 +33,16 @@ metric <- "Accuracy"
 # LogLoss: useful in multi-class datasets
 # For Cross-Validation
 # Select number of repeats for cross-validation
-r <- 3
+r <- 2
 # Select number of folds for cross-validation
-k <- 10
+k <- 3
+# Select number of features for limma selection
+n <- 9
+
+# FUNCTIONS
+source(file = file.path(CODE_DIR, "NA_removal_imputation.R"))
+source(file = file.path(CODE_DIR, "limma_fs.R"))
+source(file = file.path(CODE_DIR, "spot_check_evaluation.R"))
 
 ################################################################################### 
 ##STEP 1: LOAD DATA
@@ -45,6 +54,41 @@ for (i in list.files(DATA_DIR)) {
   tbVals_20 <- tbVals_project[sample(nrow(tbVals_project),size=20), ]
   tbVals <- rbind(tbVals, tbVals_20)                
 }
+
+################################################################################### 
+##STEP 2: DATA EXPLORATION
+###################################################################################
+print("2. DATA EXPLORATION")
+
+## t-SNE = t-Distributed Stochastic Neighbor Embedding (of 50000 random CpGs)
+## ---------------------------------------------------
+# is a non-linear technique for dimensionality reduction that is particularly well 
+# suited for the visualization of high-dimensional datasets.
+print("Performing t-Distributed Stochastic Neighbor Embedding (t-SNE)...")
+set.seed(1234)
+tbVals_na <- tbVals[ , apply(tbVals, 2, function(x) !any(is.na(x)))]
+tbVals_tsne_subset <- sample(tbVals_na[-length(tbVals_na)], 50000)
+tsne <- Rtsne(as.matrix(tbVals_tsne_subset), 
+              dims = 2, 
+              perplexity=6, 
+              verbose=TRUE, 
+              max_iter = 5000,
+              check_duplicates = FALSE)
+png(file = file.path(RESULTS_DIR, paste0("tsne_final.png")),
+    res = 300,
+    height = 2700,
+    width = 2700)
+plot(tsne$Y, 
+     pch = pch[factor(tbVals_na$tumor_tissue_site)], 
+     cex = 1 , 
+     main = paste0("t-sne"), 
+     col = pal[factor(tbVals_na$tumor_tissue_site)],
+     xlab = "First dimension", 
+     ylab = "Second dimension")
+legend("topright", legend=levels(factor(tbVals_na$tumor_tissue_site)), text.col=pal, col = pal,
+       bg="white", pch = pch, cex=0.5)
+dev.off()
+
 dataset <- tbVals
 
 ################################################################################
@@ -64,14 +108,28 @@ dataTest <- dataset[-trainIndex,]
 dataTrain$ID <- c(1:(nrow(dataTrain)))
 # repeated 3 times 10-fold cross-validation
 # loop for doing 3 repetitions of cross-validation
-cl <- makePSOCKcluster(5)
+tr_dat <- data.frame(a = runif(30),
+                     b = runif(30),
+                     c = runif(30),
+                     d = runif(30),
+                     e = runif(30),
+                     f = runif(30),
+                     g = runif(30),
+                     h = runif(30))
+tr_lab <- factor(sample(c("control", "treatment1", "treatment2"), 30, replace = TRUE))
+dataTrain <- cbind(tr_dat, tr_lab)
+dataTrain <- iris
+dataTrain$ID <- c(1:(nrow(dataTrain)))
+
+
+cl <- makePSOCKcluster(8)
 registerDoParallel(cl)
-for (j in c(1:r)) {
+for (j in 1:r) {
   # create lists for saving the final metrics
   final_accuracy <- list()
   final_kappa <- list()
   # loop for generating 10 folds from the training dataset and perform cross-validation
-  for (i in c(1:k)) {
+  for (i in 1:k) {
     print(paste(j, " x ", i))
     # create lists for saving the metrics
     accuracy <- list()
@@ -99,8 +157,8 @@ for (j in c(1:r)) {
     #   a.2) DMPs
     print(" 2) Limma...")
     set.seed(seed)
-    keep <- limma_fs(train[, -length(train)], factor(train[, length(train)]), 1000)
-    #   create a new dataset with DMPs 
+    keep <- limma_fs(train[, -length(train)], factor(train[, length(train)]), n)
+    #   create a new dataset with DMPs
     keep <- colnames(train) %in% keep
     keep[length(keep)] <- TRUE
     print(paste("Features:", sum(keep)))
@@ -122,24 +180,24 @@ for (j in c(1:r)) {
     #   define the control using a random forest selection function
     control <- rfeControl(functions=rfFuncs, method="cv", number=10, repeats = 5)
     #   define a vector with the number of features that should be trained with
-    subset <- seq(1, ncol(train), by = 5)
+    subset <- seq(1, ncol(train), by = 1)
     #   run the RFE algorithm
-    results <- rfe(train[,-length(train)], 
-                   as.factor(train[,length(train)]), 
-                   size = subset, 
+    results <- rfe(train[,-length(train)],
+                   as.factor(train[,length(train)]),
+                   size = subset,
                    metric = "Kappa",
                    rfeControl = control)
-    #   summarize the results
-    results
-    #   plot and save the results
-    png(filename = file.path(RESULTS_DIR, paste0("predictors_", j,"x", i, ".png")),
-        res = 200,
-        width = 1000,
-        height = 800)
-    plot(results, type=c("g", "o"))
-    dev.off()
-    write.csv(results$fit$importance, file = file.path(RESULTS_DIR, paste0("predictors_", j,"x", i, ".csv")))
-    write.csv(results$fit$confusion, file = file.path(RESULTS_DIR, paste0("predictors_confusion_matrix", j,"x", i, ".csv")))
+    ##   summarize the results
+    #results
+    ##   plot and save the results
+    #png(filename = file.path(RESULTS_DIR, paste0("predictors_", j,"x", i, ".png")),
+    #    res = 200,
+    #    width = 1000,
+    #    height = 800)
+    #plot(results, type=c("g", "o"))
+    #dev.off()
+    #write.csv(results$fit$importance, file = file.path(RESULTS_DIR, paste0("predictors_", j,"x", i, ".csv")))
+    #write.csv(results$fit$confusion, file = file.path(RESULTS_DIR, paste0("predictors_confusion_matrix", j,"x", i, ".csv")))
     #   list the chosen features
     predictors <- predictors(results)
     keep <- colnames(train) %in% predictors
@@ -155,13 +213,21 @@ for (j in c(1:r)) {
     # B) SPOT-CHECK ALGORITHMS
     print("Performing spot-check...")
     set.seed(seed)
-    models <- spot.check(train, test, label = "tumor_tissue_site", weights = model_weights)
+    models <- spot.check(train, test, label = class_label, weights = model_weights)
     # C) METRICS
     accuracy[[i]] <- models$Accuracy
+    print(accuracy)
+    # accuracy <- rbind(accuracy, models$Accuracy)
     kappa[[i]] <- models$Kappa
+    print(kappa)
+    # kappa <- rbind(kappa, models$Kappa)
   }
   final_accuracy[[j]] <- accuracy
+  print(final_accuracy)
+  # final_accuracy <- rbind(final_accuracy, accuracy)
   final_kappa[[j]] <- kappa
+  print(final_kappa)
+  # final_kappa <- rbind(final_kappa, kappa)
 }
 stopCluster(cl)
 
