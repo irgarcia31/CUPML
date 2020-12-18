@@ -3,22 +3,23 @@
 #' This function is thougth to be used inside a cross-validation loop, therefore,
 #' no caret::trControl is used to specify cross-validation settings.
 #' 
-#' @dataTrain data.frame with samples as rows and features as columns. 
+#' @param dataTrain data.frame with samples as rows and features as columns. 
 #' There must be an extra column with class labels.
-#' @dataTest data.frame with samples as rows and features as columns. 
+#' @param dataTest data.frame with samples as rows and features as columns. 
 #' There must be an extra column with class labels.
-#' @label character specifying the column name with class labels.
-#' @metric A string that specifies what summary metric will be used to select the 
+#' @param label character specifying the column name with class labels.
+#' @param metric A string that specifies what summary metric will be used to select the 
 #' optimal model. By default, possible values are "RMSE" and "Rsquared" for regression 
 #' and "Accuracy" and "Kappa" for classification.
 #' Default: Accuracy
-#' @weights A numeric vector of case weights. This argument will only affect models 
+#' @param weights A numeric vector of case weights. This argument will only affect models 
 #' that allow case weights.
 #' Default: NULL
-#' @algorithms character vector with the machine learning algortihms to spot-check.
+#' @param algorithms character vector with the machine learning algortihms to spot-check.
 #' It is desirable to try a mixture of algorithms. The function uses "lda", "nb", 
 #' "svmRadial", "rpart", "knn", "rf", "C5.0", "treebag" and "gbm" by default
-#' 
+#' @param return a list with $Accuracy and $Kappa information of the models specify in 
+#' algorithms
 
 spot.check <- function(dataTrain, 
                        dataTest, 
@@ -40,8 +41,8 @@ spot.check <- function(dataTrain,
   }
 
   # Spot-check algorithms
-  accuracy <- c()
-  kappa <- c()
+  accuracy <- list()
+  kappa <- list()
   for (i in algorithms){
     set.seed(seed)
     # Train the model with the training data
