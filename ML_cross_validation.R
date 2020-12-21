@@ -108,19 +108,9 @@ dataTest <- dataset[-trainIndex,]
 dataTrain$ID <- c(1:(nrow(dataTrain)))
 # repeated 3 times 10-fold cross-validation
 # loop for doing 3 repetitions of cross-validation
-tr_dat <- data.frame(a = runif(30),
-                     b = runif(30),
-                     c = runif(30),
-                     d = runif(30),
-                     e = runif(30),
-                     f = runif(30),
-                     g = runif(30),
-                     h = runif(30))
-tr_lab <- factor(sample(c("control", "treatment1", "treatment2"), 30, replace = TRUE))
-dataTrain <- cbind(tr_dat, tr_lab)
+
 dataTrain <- iris
 dataTrain$ID <- c(1:(nrow(dataTrain)))
-
 
 cl <- makePSOCKcluster(8)
 registerDoParallel(cl)
