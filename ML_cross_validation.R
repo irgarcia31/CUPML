@@ -106,119 +106,137 @@ dataTest <- dataset[-trainIndex,]
 ## STEP 4: EVALUATE ALGORITHMS
 ################################################################################
 dataTrain$ID <- c(1:(nrow(dataTrain)))
+
 # repeated 3 times 10-fold cross-validation
-# loop for doing 3 repetitions of cross-validation
 
 dataTrain <- iris
 dataTrain$ID <- c(1:(nrow(dataTrain)))
 
 cl <- makePSOCKcluster(8)
 registerDoParallel(cl)
+
+# loop for doing 3 repetitions of cross-validation
 for (j in 1:r) {
-  # create lists for saving the final metrics
-  final_accuracy <- list()
-  final_kappa <- list()
-  # loop for generating 10 folds from the training dataset and perform cross-validation
-  for (i in 1:k) {
-    print(paste(j, " x ", i))
-    # create lists for saving the metrics
-    accuracy <- list()
-    kappa <- list()
-    # creating 10 random folds from the training dataset
-    print("Creating folds...")
-    set.seed(seed)
-    folds <- createFolds(dataTrain[, class_label], k = k)
-    # splitting the data into training and testing
-    train <- dataTrain[dataTrain$ID %in% unlist(folds[-i]), ]
-    test <- dataTrain[dataTrain$ID %in% folds[[i]], ]
-    train$ID <- NULL
-    test$ID <- NULL
-    # A) FEATURE SELECTION
-    print("Performing feature selection...")
-    #   a.1) Handle NA
-    print(" 1) NAs...")
-    #   Some ML algorithm do not support missing values
-    #   To adress this problem, a custom function has been created
-    #   remove.inpute.NA function remove probes with more than "x" % of NAs and impute the rest of them
-    set.seed(seed)
-    data_list <- remove.impute.NA(dataTrain = train, dataTest = test, method = "median", class_label = class_label)
-    train <- data_list$dataTrain
-    test <- data_list$dataTest
-    #   a.2) DMPs
-    print(" 2) Limma...")
-    set.seed(seed)
-    keep <- limma_fs(train[, -length(train)], factor(train[, length(train)]), n)
-    #   create a new dataset with DMPs
-    keep <- colnames(train) %in% keep
-    keep[length(keep)] <- TRUE
-    print(paste("Features:", sum(keep)))
-    train <- train[, keep]
-    test <- test[, keep]
-    #   a.3) Remove correlated attributes
-    print(" 3) Correlated attributes...")
-    #   find attributes that are highly correlated and remove them
-    set.seed(seed)
-    correlations <- cor(train[,-length(train)])
-    highlyCorrelated <- findCorrelation(correlations, cutoff=cutoff_correlated)
-    print(paste("Features:", dim(train)[2] - length(highlyCorrelated)))
-    #   create a new dataset without highly correlated features
-    train <- train[,-highlyCorrelated]
-    test <- test[,-highlyCorrelated]
-    #   a.4) Wrapped methods: Recursive Feature Selection
-    print(" 4) RFE...")
-    set.seed(seed)
-    #   define the control using a random forest selection function
-    control <- rfeControl(functions=rfFuncs, method="cv", number=10, repeats = 5)
-    #   define a vector with the number of features that should be trained with
-    subset <- seq(1, ncol(train), by = 1)
-    #   run the RFE algorithm
-    results <- rfe(train[,-length(train)],
-                   as.factor(train[,length(train)]),
-                   size = subset,
-                   metric = "Kappa",
-                   rfeControl = control)
-    ##   summarize the results
-    #results
-    ##   plot and save the results
-    #png(filename = file.path(RESULTS_DIR, paste0("predictors_", j,"x", i, ".png")),
-    #    res = 200,
-    #    width = 1000,
-    #    height = 800)
-    #plot(results, type=c("g", "o"))
-    #dev.off()
-    #write.csv(results$fit$importance, file = file.path(RESULTS_DIR, paste0("predictors_", j,"x", i, ".csv")))
-    #write.csv(results$fit$confusion, file = file.path(RESULTS_DIR, paste0("predictors_confusion_matrix", j,"x", i, ".csv")))
-    #   list the chosen features
-    predictors <- predictors(results)
-    keep <- colnames(train) %in% predictors
-    keep[length(keep)] <- TRUE
-    print(paste("Features:", sum(keep)))
-    train <- train[, keep]
-    test <- test[, keep]
-    # Handle class imbalance
-    model_weights <- NULL
-    for (m in train[, class_label]){
-      model_weights <- c(model_weights, (1/table(train[, class_label])[m]) * 0.5)
-    }
-    # B) SPOT-CHECK ALGORITHMS
-    print("Performing spot-check...")
-    set.seed(seed)
-    models <- spot.check(train, test, label = class_label, weights = model_weights)
-    # C) METRICS
-    accuracy[[i]] <- models$Accuracy
-    print(accuracy)
-    # accuracy <- rbind(accuracy, models$Accuracy)
-    kappa[[i]] <- models$Kappa
-    print(kappa)
-    # kappa <- rbind(kappa, models$Kappa)
-  }
-  final_accuracy[[j]] <- accuracy
-  print(final_accuracy)
-  # final_accuracy <- rbind(final_accuracy, accuracy)
-  final_kappa[[j]] <- kappa
-  print(final_kappa)
-  # final_kappa <- rbind(final_kappa, kappa)
+	
+	# create lists for saving the final metrics
+	final_accuracy <- list()
+	final_kappa <- list()
+	
+	# loop for generating 10 folds from the training dataset and perform cross-validation
+	for (i in 1:k) {
+		
+		print(paste(j, " x ", i))
+    		
+		# create lists for saving the metrics
+    		accuracy <- list()
+    		kappa <- list()
+    
+		# create 10 random folds from the training dataset
+    		print("Creating folds...")
+   		set.seed(seed)
+    		folds <- createFolds(dataTrain[, class_label], k = k)
+    
+		# splitting the data into training and testing
+		train <- dataTrain[dataTrain$ID %in% unlist(folds[-i]), ]
+    		test <- dataTrain[dataTrain$ID %in% folds[[i]], ]
+    		train$ID <- NULL
+    		test$ID <- NULL
+    
+		# A) FEATURE SELECTION
+    		print("Performing feature selection...")
+    
+		#   a.1) Handle NA
+    		print(" 1) NAs...")
+    		#   Some ML algorithm do not support missing values
+    		#   To adress this problem, a custom function has been created
+    		#   remove.inpute.NA function remove probes with more than "x" % of NAs and impute the rest of them
+    		set.seed(seed)
+    		data_list <- remove.impute.NA(dataTrain = train, dataTest = test, method = "median", class_label = class_label)
+    		train <- data_list$dataTrain
+    		test <- data_list$dataTest
+    
+		#   a.2) DMPs
+    		print(" 2) Limma...")
+    		set.seed(seed)
+    		keep <- limma_fs(train[, -length(train)], factor(train[, length(train)]), n)
+    		#   create a new dataset with DMPs
+    		keep <- colnames(train) %in% keep
+    		keep[length(keep)] <- TRUE
+    		print(paste("Features:", sum(keep)))
+    		train <- train[, keep]
+    		test <- test[, keep]
+    
+		#   a.3) Remove correlated attributes
+    		print(" 3) Correlated attributes...")
+    		#   find attributes that are highly correlated and remove them
+    		set.seed(seed)
+    		correlations <- cor(train[,-length(train)])
+    		highlyCorrelated <- findCorrelation(correlations, cutoff=cutoff_correlated)
+    		print(paste("Features:", dim(train)[2] - length(highlyCorrelated)))
+    		#   create a new dataset without highly correlated features
+    		train <- train[,-highlyCorrelated]
+    		test <- test[,-highlyCorrelated]
+    
+		#   a.4) Wrapped methods: Recursive Feature Selection
+    		print(" 4) RFE...")
+    		set.seed(seed)
+    		#   define the control using a random forest selection function
+    		control <- rfeControl(functions=rfFuncs, method="cv", number=10, repeats = 5)
+    		#   define a vector with the number of features that should be trained with
+    		subset <- seq(1, ncol(train), by = 1)
+    		#   run the RFE algorithm
+    		results <- rfe(train[,-length(train)],
+				   as.factor(train[,length(train)]),
+				   size = subset,
+				   metric = "Kappa",
+				   rfeControl = control)
+    		##   summarize the results
+    		#results
+   	 	##   plot and save the results
+    		#png(filename = file.path(RESULTS_DIR, paste0("predictors_", j,"x", i, ".png")),
+    		#    res = 200,
+		#    width = 1000,
+    		#    height = 800)
+    		#plot(results, type=c("g", "o"))
+    		#dev.off()
+    		#write.csv(results$fit$importance, file = file.path(RESULTS_DIR, paste0("predictors_", j,"x", i, ".csv")))
+    		#write.csv(results$fit$confusion, file = file.path(RESULTS_DIR, paste0("predictors_confusion_matrix", j,"x", i, ".csv")))
+    		#   list the chosen features
+    		predictors <- predictors(results)
+    		keep <- colnames(train) %in% predictors
+    		keep[length(keep)] <- TRUE
+    		print(paste("Features:", sum(keep)))
+    		train <- train[, keep]
+    		test <- test[, keep]
+    
+		# Handle class imbalance
+    		model_weights <- NULL
+    		for (m in train[, class_label]){
+			model_weights <- c(model_weights, (1/table(train[, class_label])[m]) * 0.5)
+		}
+    
+		# B) SPOT-CHECK ALGORITHMS
+    		print("Performing spot-check...")
+    		set.seed(seed)
+    		models <- spot.check(train, test, label = class_label, weights = model_weights)
+    
+		# C) METRICS
+    		accuracy[[i]] <- models$Accuracy
+    		print(accuracy)
+    		# accuracy <- rbind(accuracy, models$Accuracy)
+    		kappa[[i]] <- models$Kappa
+    		print(kappa)
+    		# kappa <- rbind(kappa, models$Kappa)
+	}
+	
+	final_accuracy[[j]] <- accuracy
+  	print(final_accuracy)
+  	# final_accuracy <- rbind(final_accuracy, accuracy)
+  	final_kappa[[j]] <- kappa
+  	print(final_kappa)
+  	# final_kappa <- rbind(final_kappa, kappa)
 }
+
 stopCluster(cl)
 
 # summarize Best Model
