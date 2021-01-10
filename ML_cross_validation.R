@@ -213,10 +213,10 @@ for (j in 1:r) {
 		   rfeControl = control)
 		##   summarize the results
 		#results
-  	  ##   plot and save the results
+  	  	##   plot and save the results
 		#png(filename = file.path(RESULTS_DIR, paste0("predictors_", j,"x", i, ".png")),
 		#    res = 200,
-    #    width = 1000,
+    		#    width = 1000,
 		#    height = 800)
 		#plot(results, type=c("g", "o"))
 		#dev.off()
