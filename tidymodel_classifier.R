@@ -121,13 +121,15 @@ if (method == "knn") {
   system.time(rec <- recipes::recipe(class_label ~ ., data = dataTrain ))
   %>%
     recipes::step_knnimpute(all_predictors(), neighbors = neighbors) %>%
-    recipes::prep(training = dataTrain)) 
+    recipes::prep(training = dataTrain)
 recipe <- recipes::prep(recipe, training = dataTrain)
 dataTrain <- recipes::bake(rec, dataTrain)
 dataTest <- recipes::bake(rec, dataTest)
 my_list <- list("dataTrain" = dataTrain, "dataTest" = dataTest)
 return(my_list)
 }
+
+# PROBLEM: couldn't alocate vector of 3... GB size
 
 # maybe add check_missing() which stop pred if NAs are detected
 
